@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from datetime import time
+from datetime import time, date
 
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -44,6 +44,7 @@ async def send_morning_all(app: Application):
 
     from morning import build_morning_message, tasks_keyboard
     from database import get_user
+    from phrases import morning_text
 
     for (uid,) in users:
         try:
@@ -51,9 +52,7 @@ async def send_morning_all(app: Application):
                 user = await get_user(db, uid)
                 # Прогрессия бега: +0.5 км каждую неделю
                 week = user.get("week_num", 0)
-                current_week = (
-                    __import__("datetime").date.today().isocalendar()[1]
-                )
+                current_week = date.today().isocalendar()[1]
                 if user.get("last_week") != current_week:
                     new_km = round(user["run_km"] + 0.5, 1)
                     await db.execute(
@@ -63,14 +62,11 @@ async def send_morning_all(app: Application):
                     await db.commit()
                     user = await get_user(db, uid)
 
-            from phrases import morning_text
-            from morning import tasks_keyboard
-            from database import get_user
             async with aiosqlite.connect(DB_PATH) as db:
                 user = await get_user(db, uid)
                 async with db.execute(
                     "SELECT task_key FROM daily_log WHERE user_id=? AND date=? AND done=1",
-                    (uid, __import__("datetime").date.today().isoformat())
+                    (uid, date.today().isoformat())
                 ) as cur:
                     done = [r[0] for r in await cur.fetchall()]
 
@@ -141,9 +137,9 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"/morning — утреннее задание прямо сейчас\n"
         f"/evening — вечерний отчёт\n"
         f"/stats — твой дашборд\n"
-        f"/add\_project — добавить проект\n"
+        f"/add\\_project — добавить проект\n"
         f"/projects — список проектов\n"
-        f"/add\_book — добавить книгу\n"
+        f"/add\\_book — добавить книгу\n"
         f"/weekly — еженедельный обзор\n\n"
         f"Начнём. /morning"
     )
@@ -158,11 +154,11 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "/morning — задания на сегодня\n"
         "/evening — вечерний отчёт\n"
         "/stats — дашборд: XP, стрик, проекты\n"
-        "/add\_project `Название Цель` — добавить проект\n"
+        "/add\\_project `Название Цель` — добавить проект\n"
         "/projects — все проекты\n"
-        "/update\_project — обновить метрику проекта\n"
-        "/add\_book `Название Страниц` — добавить книгу\n"
-        "/book\_progress `страниц` — отметить страницы\n"
+        "/update\\_project — обновить метрику проекта\n"
+        "/add\\_book `Название Страниц` — добавить книгу\n"
+        "/book\\_progress `страниц` — отметить страницы\n"
         "/weekly — запустить еженедельное ревью\n",
         parse_mode="Markdown"
     )
@@ -184,7 +180,13 @@ async def post_init(app: Application):
 
 
 def main():
-    asyncio.get_event_loop().run_until_complete(init_db())
+    if not TOKEN:
+        raise RuntimeError(
+            "BOT_TOKEN не задан. Укажите переменную окружения BOT_TOKEN "
+            "(токен, полученный от @BotFather)."
+        )
+
+    asyncio.run(init_db())
 
     app = (
         Application.builder()
